@@ -136,7 +136,7 @@ const updateUserBitcoinAmount = async (req, res) => {
 
     return res.status(200).send(updatedBitcoin);
   } catch (error) {
-    res.status(400).send({ message: `error while updating amount: ${error}` });
+    res.status(204).send({ message: `error while updating amount: ${error}` });
   }
 };
 
@@ -151,7 +151,7 @@ const getUserBalance = async (req, res) => {
         }`
       );
   } catch (error) {
-    res.status(400).send({ message: `can not find user: ${error}$` });
+    res.status(404).send({ message: `can not find user: ${error}$` });
   }
 };
 
