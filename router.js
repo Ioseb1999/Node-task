@@ -9,7 +9,7 @@ router.get("/", (req, res) => {
 
 router.get("/users", getUsers);
 router.get("/bitcoin", getBitcoins);
-router.post("/add-user", createUser);
+router.post("/users", createUser);
 router.post("/add-bitcoin", createBitcoin);
 router.put("/users/:id", updateUser)
 router.post("/users/:userId/usd", updateUserAmount)

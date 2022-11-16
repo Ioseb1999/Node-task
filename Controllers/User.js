@@ -2,47 +2,45 @@ const User = require("../Models/User");
 const { v4: uuidv4 } = require("uuid");
 const Bitcoin = require("../Models/Bitcoin");
 
-const getUsers = (req, res) => {
+const userAndBitcoin = async (id) => {
   try {
-    User.find((error, users) => {
-      if (error) {
-        res.status(400).send({ message: "Cannot get users!" });
-      }
-      res.json(users);
-    });
+    const data = await Promise.all([User.find({ _id: id }), Bitcoin.find()]);
+    console.log(data);
+    return data;
   } catch (error) {
-    res.status(400).send({ message: "Error ocuired while getting users!" });
+    console.log(error);
   }
-  User.find;
 };
 
-const createUser = (req, res) => {
+const getUsers = async (req, res) => {
+  try {
+    const user = await User.find();
+
+    return res.status(200).send(user);
+  } catch (error) {
+    res.status(422).send({ message: "Can not get Users!" });
+  }
+};
+
+const createUser = async (req, res) => {
   try {
     const user = new User({
       name: req.body.name,
       username: req.body.username,
       email: req.body.email,
-      id: uuidv4(),
-      bitcoinAmount: req.body.bitcoinAmount,
-      usdBalance: req.body.usdBalance,
+      id: uuidv4()
     });
 
-    user.save((error, user) => {
-      if (error) {
-        res.status(400).send({ message: "Can't create user!" });
-      }
-      res.json(user);
-    });
+    const createdUser = await user.save();
+    return res.status(200).send(createdUser);
   } catch (error) {
-    res
-      .status(400)
-      .send({ mesasge: "Something went wron while creating user!" });
+    res.status(403).send({ mesasge: "can not create user!" });
   }
 };
 
-const updateUser = (req, res) => {
+const updateUser = async (req, res) => {
   try {
-    User.findByIdAndUpdate(
+    const updatedUser = await User.findByIdAndUpdate(
       {
         _id: req.params.id,
       },
@@ -50,168 +48,101 @@ const updateUser = (req, res) => {
         $set: {
           name: req.body.name,
           username: req.body.username,
-          email: req.body.email,
-          bitcoinAmount: req.body.bitcoinAmount,
-          usdBalance: req.body.usdBalance,
+          email: req.body.email
         },
       },
-      { new: true },
-      (error, User) => {
-        if (error) {
-          res
-            .status(400)
-            .send({ message: `error while updating user!: ${error}` });
-        } else {
-          res.json(User);
-        }
-      }
+      { new: true }
     );
+    return res.status(200).send(updatedUser);
   } catch (error) {
-    res.status(400).send({ message: `Can not update user: ${error}` });
+    res.status(204).send({ message: `Can not update user!` });
   }
 };
 
 const updateUserAmount = async (req, res) => {
-  const user = await User.find({ _id: req.params.userId });
-  const bitcoin = await Bitcoin.find();
   try {
-    if (req.body.action === "deposit") {
-      User.findByIdAndUpdate(
-        {
-          _id: req.params.userId,
-        },
-        {
-          $set: {
-            name: req.body.name,
-            username: req.body.username,
-            email: req.body.email,
-            bitcoinAmount: req.body.bitcoinAmount,
-            usdBalance: user[0].usdBalance + req.body.amount,
-          },
-        },
-        { new: true },
-        (error, User) => {
-          if (error) {
-            res
-              .status(400)
-              .send({ message: `error while updating user amount!: ${error}` });
-          } else {
-            res.json(User);
-          }
-        }
-      );
-    }
-    if (req.body.action === "withdraw") {
-      if (user[0].usdBalance - req.body.amount < 0) {
-        return res.status(500).send({ message: "Not Suffitient Funds!" });
+    const [user, bitcoin] = await userAndBitcoin(req.params.userId);
+    const returnedValue = (actionType) => {
+      if (actionType === "deposit") {
+        return {
+          bitcoinAmount: req.body.bitcoinAmount,
+          usdBalance: user[0].usdBalance + req.body.amount,
+        };
       }
-      User.findByIdAndUpdate(
-        {
-          _id: req.params.userId,
-        },
-        {
-          $set: {
-            name: req.body.name,
-            username: req.body.username,
-            email: req.body.email,
-            bitcoinAmount: req.body.bitcoinAmount,
-            usdBalance: user[0].usdBalance - req.body.amount,
-          },
-        },
-        { new: true },
-        (error, User) => {
-          if (error) {
-            res
-              .status(400)
-              .send({ message: `error while updating user amount!: ${error}` });
-          } else {
-            res.json(User);
-          }
+      if (actionType === "withdraw") {
+        if (user[0].usdBalance - req.body.amount < 0) {
+          return res.status(422).send({ message: "Not Suffitient Funds!" });
         }
-      );
-    } else {
-    }
+        return {
+          bitcoinAmount: req.body.bitcoinAmount,
+          usdBalance: user[0].usdBalance - req.body.amount,
+        };
+      }
+    };
+    const updatedAmount = await User.findByIdAndUpdate(
+      {
+        _id: req.params.userId,
+      },
+      {
+        $set: returnedValue(req.body.action),
+      },
+      { new: true }
+    );
+
+    return res.status(200).send(updatedAmount);
   } catch (error) {
-    res.status(400).send({ message: `error while updating amount: ${error}` });
+    res.status(204).send({ message: `error while updating amount` });
   }
 };
 
 const updateUserBitcoinAmount = async (req, res) => {
-  const user = await User.find({ _id: req.params.userId });
-  const bitcoin = await Bitcoin.find();
   try {
-    if (req.body.action === "buy") {
-      if (user[0].usdBalance - req.body.amount * bitcoin[0].price < 0) {
-        return res
-          .status(500)
-          .send({ message: "You don't have enough amount to buy bitcoin!" });
-      }
-      User.findByIdAndUpdate(
-        {
-          _id: req.params.userId,
-        },
-        {
-          $set: {
-            name: req.body.name,
-            username: req.body.username,
-            email: req.body.email,
-            bitcoinAmount: user[0].bitcoinAmount + req.body.amount,
-            usdBalance: user[0].usdBalance - req.body.amount * bitcoin[0].price,
-          },
-        },
-        { new: true },
-        (error, User) => {
-          if (error) {
-            res
-              .status(400)
-              .send({ message: `error while updating user amount!: ${error}` });
-          } else {
-            res.json(User);
-          }
+    const [user, bitcoin] = await userAndBitcoin(req.params.userId);
+
+    const returnedValue = (actionType) => {
+      if (actionType === "buy") {
+        if (user[0].usdBalance - req.body.amount * bitcoin[0].price < 0) {
+          return res
+            .status(422)
+            .send({ message: "You don't have enough amount to buy bitcoin!" });
         }
-      );
-    }
-    if (req.body.action === "sell") {
-      if (user[0].bitcoinAmount - req.body.amount < 0) {
-        return res
-          .status(500)
-          .send({ message: "You don't have that much Bitcoin to sell!" });
+        return {
+          bitcoinAmount: user[0].bitcoinAmount + req.body.amount,
+          usdBalance: user[0].usdBalance - req.body.amount * bitcoin[0].price,
+        };
       }
-      User.findByIdAndUpdate(
-        {
-          _id: req.params.userId,
-        },
-        {
-          $set: {
-            name: req.body.name,
-            username: req.body.username,
-            email: req.body.email,
-            bitcoinAmount: user[0].bitcoinAmount - req.body.amount,
-            usdBalance: user[0].usdBalance + req.body.amount * bitcoin[0].price,
-          },
-        },
-        { new: true },
-        (error, User) => {
-          if (error) {
-            res
-              .status(400)
-              .send({ message: `error while updating user amount!: ${error}` });
-          } else {
-            res.json(User);
-          }
+      if (actionType === "sell") {
+        if (user[0].bitcoinAmount - req.body.amount < 0) {
+          return res
+            .status(422)
+            .send({ message: "You don't have that much Bitcoin to sell!" });
         }
-      );
-    } else {
-    }
+        return {
+          bitcoinAmount: user[0].bitcoinAmount - req.body.amount,
+          usdBalance: user[0].usdBalance + req.body.amount * bitcoin[0].price,
+        };
+      }
+    };
+
+    const updatedBitcoin = await User.findByIdAndUpdate(
+      {
+        _id: req.params.userId,
+      },
+      {
+        $set: returnedValue(req.body.action),
+      },
+      { new: true }
+    );
+
+    return res.status(200).send(updatedBitcoin);
   } catch (error) {
     res.status(400).send({ message: `error while updating amount: ${error}` });
   }
 };
 
 const getUserBalance = async (req, res) => {
-  const user = await User.find({ _id: req.params.userId });
-  const bitcoin = await Bitcoin.find();
   try {
+    const [user, bitcoin] = await userAndBitcoin(req.params.userId);
     return res
       .status(200)
       .send(
